@@ -233,6 +233,40 @@
   }
 
   .hint{ font-size:12.5px; font-weight:600; opacity:.6; margin-top:22px; letter-spacing:.03em; }
+
+  /* play-to selector */
+  .seglabel{ font-size:12px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; opacity:.6; margin-bottom:10px; }
+  .seg{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-bottom:30px; }
+  .chip{
+    font-family:'Anton',sans-serif; font-size:22px; letter-spacing:.02em;
+    min-width:62px; padding:12px 16px; border-radius:14px; cursor:pointer;
+    color:#cfe9de; background:rgba(255,255,255,.06); border:2px solid rgba(255,255,255,.14);
+    transition:transform .08s, background .15s, color .15s;
+  }
+  .chip:active{ transform:scale(.93); }
+  .chip.on{
+    color:#06241a; background:linear-gradient(180deg,#7ef0c0,#34cf90);
+    border-color:transparent; box-shadow:0 6px 16px rgba(52,207,144,.4), inset 0 2px 0 rgba(255,255,255,.5);
+  }
+  .linkbtn{
+    margin-top:18px; background:none; border:none; cursor:pointer;
+    font-family:'Inter',sans-serif; font-weight:700; font-size:14px; letter-spacing:.03em;
+    color:#9fd9c2; text-decoration:underline; text-underline-offset:4px; opacity:.85;
+  }
+  .linkbtn:active{ opacity:.6; }
+
+  /* new game button (in-game) */
+  #newgame{
+    position:fixed; left:50%; transform:translateX(-50%);
+    top:calc(13px + env(safe-area-inset-top,0px));
+    height:34px; padding:0 15px; border-radius:17px; z-index:30;
+    display:none; align-items:center; gap:7px;
+    background:rgba(8,22,17,.6); border:1px solid rgba(255,255,255,.14);
+    color:#cfe9de; font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+    cursor:pointer; backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  }
+  #newgame.show{ display:flex; }
+  #newgame:active{ transform:translateX(-50%) scale(.94); }
 </style>
 </head>
 <body>
@@ -269,12 +303,20 @@
   </div>
 
   <div id="mute">🔊</div>
+  <button id="newgame">↺ New Game</button>
 
   <!-- Intro -->
   <div class="overlay" id="intro">
     <svg class="ico" viewBox="0 0 100 100"><polygon points="50,12 88,84 12,84" fill="#fff"/><line x1="50" y1="20" x2="50" y2="78" stroke="#b9c0b2" stroke-width="2"/></svg>
     <div class="bigtitle">PAPER<br>FOOTBALL</div>
-    <div class="sub">Pass‑and‑play flick football. Swipe the ball toward your edge. Stop it <b>hanging over</b> the line for a touchdown — fly off and it's a turnover. First to <b>21</b> wins.</div>
+    <div class="sub">Pass‑and‑play flick football. Swipe the ball toward your edge. Stop it <b>hanging over</b> the line for a touchdown — fly off and it's a turnover.</div>
+    <div class="seglabel">Play to</div>
+    <div class="seg" id="scoreSeg">
+      <button class="chip" data-v="7">7</button>
+      <button class="chip" data-v="14">14</button>
+      <button class="chip on" data-v="21">21</button>
+      <button class="chip" data-v="35">35</button>
+    </div>
     <button class="btn" id="startBtn">Kick Off</button>
     <div class="hint">2 players · one phone · hold it in portrait</div>
   </div>
@@ -286,6 +328,7 @@
     <div class="bigtitle" style="font-size:9vw">WINS</div>
     <div id="winScore">21 — 14</div>
     <button class="btn" id="rematchBtn" style="margin-top:30px">Rematch</button>
+    <button class="linkbtn" id="winNewGame">New game · change target</button>
   </div>
 
 <script>
@@ -327,7 +370,7 @@ const GAIN       = 0.7;     // swipe -> launch power
 const MAXV       = 30;      // max launch speed (px/frame)
 const MINV       = 3;       // min launch speed
 const MIN_SWIPE  = 14;      // px before a touch counts as a flick
-const WIN_SCORE  = 21;
+let   WIN_SCORE  = 21;      // target score to win (set on the start screen)
 
 /* ===== Elements ===== */
 const field=document.getElementById('field');
@@ -635,16 +678,42 @@ document.getElementById('mute').addEventListener('click',function(){
 });
 
 /* ===== Game flow ===== */
+const introEl=document.getElementById('intro');
+const winEl=document.getElementById('win');
+const newgameBtn=document.getElementById('newgame');
+
 function startGame(){
   ac(); // unlock audio on gesture
   score={1:0,2:0}; updateScore(1); updateScore(2);
   cur = Math.random()<0.5?1:2;
   ball.x=FW/2; ball.y=FH/2; ball.vx=ball.vy=0; ball.angle=0; drawBall();
   goal.style.opacity='0';
-  document.getElementById('intro').classList.add('hide');
-  document.getElementById('win').classList.add('hide');
+  introEl.classList.add('hide');
+  winEl.classList.add('hide');
+  newgameBtn.classList.add('show');
   phase='aim'; setTurnUI();
 }
+
+/* Return to the start screen (also where the win target is chosen) */
+function openIntro(){
+  phase='idle';
+  turn.style.opacity='0'; goal.style.opacity='0';
+  newgameBtn.classList.remove('show');
+  winEl.classList.add('hide');
+  syncSeg();
+  introEl.classList.remove('hide');
+}
+
+/* Win-target selector */
+const scoreSeg=document.getElementById('scoreSeg');
+function syncSeg(){
+  scoreSeg.querySelectorAll('.chip').forEach(c=>
+    c.classList.toggle('on', +c.dataset.v===WIN_SCORE));
+}
+scoreSeg.addEventListener('click',e=>{
+  const chip=e.target.closest('.chip'); if(!chip) return;
+  WIN_SCORE=+chip.dataset.v; syncSeg(); sfx('tick');
+});
 function endGame(winner){
   phase='over';
   goal.style.opacity='0'; turn.style.opacity='0';
@@ -653,7 +722,8 @@ function endGame(winner){
   nm.textContent=PLAYERS[winner].name.toUpperCase();
   nm.style.color=PLAYERS[winner].raw;
   nm.style.textShadow='0 0 28px '+PLAYERS[winner].raw;
-  document.getElementById('winScore').textContent=`${score[1]} — ${score[2]}`;
+  document.getElementById('winScore').textContent=`${score[1]} — ${score[2]}  ·  played to ${WIN_SCORE}`;
+  newgameBtn.classList.remove('show');
   w.classList.remove('hide');
   burstConfetti(PLAYERS[winner].raw);
   sfx('td'); navigator.vibrate&&navigator.vibrate([20,60,20,60,30]);
@@ -673,6 +743,8 @@ function burstConfetti(color){
 
 document.getElementById('startBtn').addEventListener('click',startGame);
 document.getElementById('rematchBtn').addEventListener('click',startGame);
+document.getElementById('winNewGame').addEventListener('click',openIntro);
+newgameBtn.addEventListener('click',openIntro);
 
 /* ===== Boot ===== */
 window.addEventListener('resize',resize);
