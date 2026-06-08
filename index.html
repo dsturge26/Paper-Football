@@ -145,6 +145,16 @@
   /* emoji ball (themed projectile) */
   .emoji{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; line-height:1; }
 
+  /* bumpers / blockers */
+  .blocker{
+    position:absolute; top:0; left:0; border-radius:50%; z-index:4;
+    display:flex; align-items:center; justify-content:center; line-height:1;
+    background:radial-gradient(circle at 34% 30%, rgba(255,255,255,.95), rgba(255,255,255,.32) 70%, rgba(255,255,255,.12));
+    box-shadow:0 5px 12px rgba(0,0,0,.45), inset 0 0 0 3px rgba(255,255,255,.4);
+    transition:opacity .25s; will-change:transform;
+  }
+  .blocker .bemoji{ filter:drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
+
   /* end-zone scoring bands */
   .band{ position:absolute; left:0; right:0; pointer-events:none; transition:opacity .25s, box-shadow .3s; }
   #bandTop{ top:0; background:linear-gradient(180deg, var(--p2-glow), transparent); border-bottom:2px dashed rgba(255,255,255,.35);}
@@ -370,6 +380,12 @@
     <svg class="ico" viewBox="0 0 100 100"><polygon points="50,12 88,84 12,84" fill="#fff"/><line x1="50" y1="20" x2="50" y2="78" stroke="#b9c0b2" stroke-width="2"/></svg>
     <div class="bigtitle">PAPER<br>FOOTBALL</div>
     <div class="sub">Pass‑and‑play flick football. Swipe the ball toward your edge. Stop it <b>hanging over</b> the line for a touchdown — fly off and it's a turnover.</div>
+    <div class="seglabel">Difficulty</div>
+    <div class="seg" id="modeSeg">
+      <button class="chip on" data-m="easy">Easy</button>
+      <button class="chip" data-m="medium">Medium</button>
+      <button class="chip" data-m="hard">Hard</button>
+    </div>
     <div class="seglabel">Theme</div>
     <div class="seg" id="themeSeg">
       <button class="tchip on" data-t="grass">🏈<span>Classic</span></button>
@@ -464,13 +480,22 @@ const PLAYERS={
 
 /* ===== Themes (field + football) ===== */
 const THEMES={
-  grass:   { cls:'t-grass',   ball:'paper' },
-  unicorn: { cls:'t-unicorn', ball:'🦄' },
-  space:   { cls:'t-space',   ball:'🚀' },
-  candy:   { cls:'t-candy',   ball:'🍭' },
-  dino:    { cls:'t-dino',    ball:'🦖' }
+  grass:   { cls:'t-grass',   ball:'paper', bump:'🏈' },
+  unicorn: { cls:'t-unicorn', ball:'🦄',   bump:'🌈' },
+  space:   { cls:'t-space',   ball:'🚀',   bump:'🪐' },
+  candy:   { cls:'t-candy',   ball:'🍭',   bump:'🍬' },
+  dino:    { cls:'t-dino',    ball:'🦖',   bump:'🥚' }
 };
 let THEME='grass';
+
+/* ===== Difficulty / bumpers ===== */
+const BUMP_REST=0.9;        // bumper bounciness
+// diamond layout (fractions of field), open center
+const BUMP_LAYOUT=[ {fx:0.5,fy:0.34}, {fx:0.5,fy:0.66}, {fx:0.26,fy:0.5}, {fx:0.74,fy:0.5} ];
+let MODE='easy';            // easy | medium | hard
+let blockers=[];
+let blockersActive=false;
+let BR=26;
 
 /* ===== State ===== */
 let FW=0, FH=0, BALL=44, R=22, BAND=56, GAP=120;
@@ -487,11 +512,13 @@ function resize(){
   BALL=Math.max(30, Math.min(46, FW*0.085)); R=BALL/2;
   BAND=Math.max(34, Math.min(78, FH*0.085));
   GAP=Math.max(90, FW*0.34);
+  BR=Math.max(20, Math.min(34, FW*0.075));
   ballEl.style.width=BALL+'px'; ballEl.style.height=BALL+'px';
   const em=ballEl.querySelector('.emoji'); if(em) em.style.fontSize=(BALL*0.94)+'px';
   bandTop.style.height=BAND+'px';
   bandBot.style.height=BAND+'px';
   buildYardLines();
+  layoutBlockers();
   if(ball.x===0&&ball.y===0){ ball.x=FW/2; ball.y=FH/2; }
   clampInside(); drawBall();
 }
@@ -506,8 +533,83 @@ function applyTheme(key){
   for(const k in THEMES) document.body.classList.remove(THEMES[k].cls);
   document.body.classList.add(THEMES[key].cls);
   renderBall();
+  // re-skin any existing bumpers to the new theme
+  blockers.forEach(b=>{ const s=b.el.querySelector('.bemoji'); if(s) s.textContent=THEMES[key].bump; });
   document.querySelectorAll('#themeSeg .tchip').forEach(c=>
     c.classList.toggle('on', c.dataset.t===key));
+}
+
+/* ===== Bumpers ===== */
+function setupBlockers(){
+  field.querySelectorAll('.blocker').forEach(n=>n.remove());
+  blockers=[];
+  if(MODE==='easy') return;
+  const t=THEMES[THEME];
+  BUMP_LAYOUT.forEach((p,i)=>{
+    const el=document.createElement('div');
+    el.className='blocker';
+    el.innerHTML='<span class="bemoji">'+t.bump+'</span>';
+    field.appendChild(el);
+    const b={ fx:p.fx, fy:p.fy, x:FW*p.fx, y:FH*p.fy, r:BR, vx:0, el };
+    if(MODE==='hard'){ b.vx=(i%2?-1:1)*(1.0 + (i%2?0.55:0.2)); }
+    blockers.push(b);
+  });
+  layoutBlockers();
+}
+function layoutBlockers(){
+  for(const b of blockers){
+    b.r=BR; b.y=FH*b.fy;
+    if(MODE!=='hard') b.x=FW*b.fx;
+    b.x=Math.min(Math.max(b.x,b.r), FW-b.r);
+    b.el.style.width=(b.r*2)+'px'; b.el.style.height=(b.r*2)+'px';
+    const s=b.el.querySelector('.bemoji'); if(s) s.style.fontSize=(b.r*1.15)+'px';
+  }
+  renderBlockers();
+}
+function renderBlockers(){
+  for(const b of blockers) b.el.style.transform=`translate3d(${b.x-b.r}px,${b.y-b.r}px,0)`;
+}
+function showBlockers(v){ blockers.forEach(b=>b.el.style.opacity=v?'1':'0'); }
+function moveBlockers(h){
+  if(MODE!=='hard'||!blockersActive) return;
+  for(const b of blockers){
+    b.x+=b.vx*h;
+    if(b.x<b.r){ b.x=b.r; b.vx=Math.abs(b.vx); }
+    else if(b.x>FW-b.r){ b.x=FW-b.r; b.vx=-Math.abs(b.vx); }
+  }
+}
+function collideBlockers(){
+  if(!blockersActive||MODE==='easy') return;
+  for(const b of blockers){
+    let dx=ball.x-b.x, dy=ball.y-b.y, d=Math.hypot(dx,dy);
+    const minD=R+b.r;
+    if(d<minD){
+      if(d===0){ dx=0; dy=-1; d=1; }
+      const nx=dx/d, ny=dy/d;
+      ball.x=b.x+nx*minD; ball.y=b.y+ny*minD;
+      const rvx=ball.vx-b.vx, rvy=ball.vy;
+      const dot=rvx*nx+rvy*ny;
+      if(dot<0){
+        ball.vx-=(1+BUMP_REST)*dot*nx;
+        ball.vy-=(1+BUMP_REST)*dot*ny;
+        ball.spin+=(Math.random()-0.5)*0.35;
+        sfx('tick');
+      }
+    }
+  }
+}
+function separateBall(){
+  if(MODE==='easy'||!blockers.length) return;
+  for(let k=0;k<8;k++){
+    let moved=false;
+    for(const b of blockers){
+      let dx=ball.x-b.x, dy=ball.y-b.y, d=Math.hypot(dx,dy);
+      const minD=R+b.r+2;
+      if(d<minD){ if(d===0){dx=0;dy=1;d=1;} ball.x=b.x+dx/d*minD; ball.y=b.y+dy/d*minD; moved=true; }
+    }
+    clampInside();
+    if(!moved) break;
+  }
 }
 function buildYardLines(){
   field.querySelectorAll('.yard').forEach(n=>n.remove());
@@ -552,6 +654,7 @@ function nextTurn(){
   cur = cur===1?2:1;
   phase='aim';
   goal.style.opacity='0';
+  blockersActive=(MODE!=='easy'); showBlockers(true);
   setTurnUI();
 }
 
@@ -636,6 +739,10 @@ function integrate(frames){
     // side rails
     if(ball.x<R){ ball.x=R; ball.vx=-ball.vx*WALL_DAMP; sfx('tick'); }
     else if(ball.x>FW-R){ ball.x=FW-R; ball.vx=-ball.vx*WALL_DAMP; sfx('tick'); }
+    // bumpers
+    moveBlockers(h);
+    collideBlockers();
+    sp=Math.hypot(ball.vx,ball.vy);
     // off the top/bottom edges
     if(ball.y < -R) return 'exit-top';
     if(ball.y > FH+R) return 'exit-bottom';
@@ -656,7 +763,7 @@ function resolveNormal(ev){
   } else {
     // ball flew off an edge => turnover, neutral re-spot
     sfx('miss'); flash('TURNOVER');
-    ball.x=FW/2; ball.y=FH/2; ball.vx=ball.vy=0; ball.angle=0; clampInside(); drawBall();
+    ball.x=FW/2; ball.y=FH/2; ball.vx=ball.vy=0; ball.angle=0; clampInside(); separateBall(); drawBall();
     nextTurn();
   }
 }
@@ -690,6 +797,7 @@ function touchdown(){
 
 function setupExtra(){
   phase='extra';
+  blockersActive=false; showBlockers(false);   // clear bumpers for the kick
   const tgt=PLAYERS[cur].edge;
   // place ball for the kick
   ball.x=FW/2; ball.y = tgt==='top' ? FH*0.62 : FH*0.38;
@@ -724,7 +832,10 @@ function loop(now){
       phase='resolving';
       if(wasExtra) resolveExtra(ev); else resolveNormal(ev);
     }
+  } else {
+    moveBlockers(frames);   // bumpers keep drifting while you aim (hard mode)
   }
+  if(blockers.length) renderBlockers();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
@@ -779,7 +890,8 @@ function startGame(){
   ac(); // unlock audio on gesture
   score={1:0,2:0}; updateScore(1); updateScore(2);
   cur = Math.random()<0.5?1:2;
-  ball.x=FW/2; ball.y=FH/2; ball.vx=ball.vy=0; ball.angle=0; drawBall();
+  setupBlockers(); blockersActive=(MODE!=='easy');
+  ball.x=FW/2; ball.y=FH/2; ball.vx=ball.vy=0; ball.angle=0; clampInside(); separateBall(); drawBall();
   goal.style.opacity='0';
   introEl.classList.add('hide');
   winEl.classList.add('hide');
@@ -789,7 +901,7 @@ function startGame(){
 
 /* Return to the start screen (also where the win target is chosen) */
 function openIntro(){
-  phase='idle';
+  phase='idle'; blockersActive=false;
   turn.style.opacity='0'; goal.style.opacity='0';
   newgameBtn.classList.remove('show');
   winEl.classList.add('hide');
@@ -813,8 +925,18 @@ document.getElementById('themeSeg').addEventListener('click',e=>{
   const c=e.target.closest('.tchip'); if(!c) return;
   applyTheme(c.dataset.t); sfx('tick');
 });
+
+/* Difficulty picker */
+const modeSeg=document.getElementById('modeSeg');
+function syncMode(){
+  modeSeg.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c.dataset.m===MODE));
+}
+modeSeg.addEventListener('click',e=>{
+  const c=e.target.closest('.chip'); if(!c) return;
+  MODE=c.dataset.m; syncMode(); sfx('tick');
+});
 function endGame(winner){
-  phase='over';
+  phase='over'; blockersActive=false;
   goal.style.opacity='0'; turn.style.opacity='0';
   const w=document.getElementById('win');
   const nm=document.getElementById('winName');
