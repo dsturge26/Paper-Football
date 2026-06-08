@@ -21,8 +21,14 @@
     --post:#ffd23e;
     --bar-h: calc(64px + env(safe-area-inset-top,0px));
     --bar-h-b: calc(64px + env(safe-area-inset-bottom,0px));
+    /* themeable field tokens (overridden by .t-* on <body>) */
     --turf-a:#176b4a;
     --turf-b:#0f5238;
+    --stripe:rgba(255,255,255,.035);
+    --line:rgba(255,255,255,.18);
+    --line-mid:rgba(255,255,255,.34);
+    --rail-a:rgba(255,255,255,.5);
+    --rail-b:rgba(255,255,255,.2);
   }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{
@@ -87,18 +93,57 @@
     position:relative; flex:1 1 auto; overflow:hidden;
     background:
       radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,.05), transparent 60%),
-      repeating-linear-gradient(90deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 38px, rgba(255,255,255,.035) 38px, rgba(255,255,255,.035) 76px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,0) 0, rgba(0,0,0,0) 38px, var(--stripe) 38px, var(--stripe) 76px),
       repeating-linear-gradient(0deg, var(--turf-a) 0, var(--turf-a) 9.999%, var(--turf-b) 10%, var(--turf-b) 20%);
     box-shadow:inset 0 0 120px rgba(0,0,0,.5);
     touch-action:none;
   }
   /* yard lines */
-  .yard{ position:absolute; left:0; right:0; height:2px; background:rgba(255,255,255,.18); }
-  .yard.mid{ height:3px; background:rgba(255,255,255,.34); box-shadow:0 0 12px rgba(255,255,255,.25); }
+  .yard{ position:absolute; left:0; right:0; height:2px; background:var(--line); }
+  .yard.mid{ height:3px; background:var(--line-mid); box-shadow:0 0 12px var(--line); }
   /* sideline rails */
-  .rail{ position:absolute; top:0; bottom:0; width:4px; background:linear-gradient(180deg,rgba(255,255,255,.5),rgba(255,255,255,.2)); }
-  .rail.l{ left:0; box-shadow:2px 0 14px rgba(255,255,255,.25);}
-  .rail.r{ right:0; box-shadow:-2px 0 14px rgba(255,255,255,.25);}
+  .rail{ position:absolute; top:0; bottom:0; width:4px; background:linear-gradient(180deg,var(--rail-a),var(--rail-b)); }
+  .rail.l{ left:0; box-shadow:2px 0 14px var(--rail-a);}
+  .rail.r{ right:0; box-shadow:-2px 0 14px var(--rail-a);}
+
+  /* ---------- Themes ---------- */
+  body.t-unicorn{ --line:rgba(255,255,255,.6); --line-mid:rgba(255,255,255,.85); --rail-a:#ffd0ec; --rail-b:#d9b8ff; --post:#ff7ec8; }
+  body.t-unicorn #field{
+    background:
+      radial-gradient(rgba(255,255,255,.6) 1px, transparent 1.7px) 0 0/24px 24px,
+      radial-gradient(130% 70% at 50% 0%, rgba(255,255,255,.3), transparent 55%),
+      repeating-linear-gradient(0deg,
+        #ffc9e9 0 12.5%, #ffd9c0 12.5% 25%, #fff4b3 25% 37.5%, #c9f5cf 37.5% 50%,
+        #bfe0ff 50% 62.5%, #e6ccff 62.5% 75%, #ffc9e9 75% 87.5%, #ffd9c0 87.5% 100%);
+    box-shadow:inset 0 0 100px rgba(255,150,215,.35);
+  }
+  body.t-space{ --line:rgba(120,200,255,.4); --line-mid:rgba(120,200,255,.7); --rail-a:#5cf0ff; --rail-b:#2a6cff; --post:#5cf0ff; }
+  body.t-space #field{
+    background:
+      radial-gradient(#fff 1px, transparent 1.5px) 0 0/42px 42px,
+      radial-gradient(#cfe6ff 1px, transparent 1.4px) 17px 23px/58px 58px,
+      radial-gradient(140% 90% at 50% 8%, #34307a, transparent 60%),
+      linear-gradient(180deg, #0a0a2c, #1a0b3c 50%, #0a0a2c);
+    box-shadow:inset 0 0 130px rgba(0,0,0,.75);
+  }
+  body.t-candy{ --line:rgba(255,255,255,.75); --line-mid:#fff; --rail-a:#ffffff; --rail-b:#ffd6e8; --post:#ffffff; }
+  body.t-candy #field{
+    background:
+      radial-gradient(140% 80% at 50% 0%, rgba(255,255,255,.25), transparent 55%),
+      repeating-linear-gradient(45deg, #ff6f9c 0 30px, #ffd1e0 30px 60px);
+    box-shadow:inset 0 0 100px rgba(180,30,80,.4);
+  }
+  body.t-dino{ --line:rgba(255,255,255,.28); --line-mid:rgba(255,240,180,.5); --rail-a:#8d6b3f; --rail-b:#5a4427; --post:#e8c06a; }
+  body.t-dino #field{
+    background:
+      radial-gradient(rgba(0,0,0,.13) 2px, transparent 3px) 0 0/30px 30px,
+      radial-gradient(120% 80% at 50% 0%, rgba(255,255,255,.06), transparent 55%),
+      repeating-linear-gradient(0deg, #2f7d3f 0 10%, #266b35 10% 20%);
+    box-shadow:inset 0 0 120px rgba(0,0,0,.45);
+  }
+
+  /* emoji ball (themed projectile) */
+  .emoji{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; line-height:1; }
 
   /* end-zone scoring bands */
   .band{ position:absolute; left:0; right:0; pointer-events:none; transition:opacity .25s, box-shadow .3s; }
@@ -248,6 +293,21 @@
     color:#06241a; background:linear-gradient(180deg,#7ef0c0,#34cf90);
     border-color:transparent; box-shadow:0 6px 16px rgba(52,207,144,.4), inset 0 2px 0 rgba(255,255,255,.5);
   }
+  /* theme picker chips */
+  .tchip{
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    min-width:66px; padding:9px 8px 8px; border-radius:14px; cursor:pointer;
+    font-size:27px; line-height:1; /* emoji size */
+    color:#cfe9de; background:rgba(255,255,255,.06); border:2px solid rgba(255,255,255,.14);
+    transition:transform .08s, background .15s, color .15s;
+  }
+  .tchip span{ font-family:'Inter',sans-serif; font-weight:700; font-size:11px; letter-spacing:.04em; }
+  .tchip:active{ transform:scale(.93); }
+  .tchip.on{
+    color:#06241a; background:linear-gradient(180deg,#7ef0c0,#34cf90);
+    border-color:transparent; box-shadow:0 6px 16px rgba(52,207,144,.4), inset 0 2px 0 rgba(255,255,255,.5);
+  }
+
   .linkbtn{
     margin-top:18px; background:none; border:none; cursor:pointer;
     font-family:'Inter',sans-serif; font-weight:700; font-size:14px; letter-spacing:.03em;
@@ -310,6 +370,14 @@
     <svg class="ico" viewBox="0 0 100 100"><polygon points="50,12 88,84 12,84" fill="#fff"/><line x1="50" y1="20" x2="50" y2="78" stroke="#b9c0b2" stroke-width="2"/></svg>
     <div class="bigtitle">PAPER<br>FOOTBALL</div>
     <div class="sub">Pass‑and‑play flick football. Swipe the ball toward your edge. Stop it <b>hanging over</b> the line for a touchdown — fly off and it's a turnover.</div>
+    <div class="seglabel">Theme</div>
+    <div class="seg" id="themeSeg">
+      <button class="tchip on" data-t="grass">🏈<span>Classic</span></button>
+      <button class="tchip" data-t="unicorn">🦄<span>Unicorn</span></button>
+      <button class="tchip" data-t="space">🚀<span>Space</span></button>
+      <button class="tchip" data-t="candy">🍭<span>Candy</span></button>
+      <button class="tchip" data-t="dino">🦖<span>Dino</span></button>
+    </div>
     <div class="seglabel">Play to</div>
     <div class="seg" id="scoreSeg">
       <button class="chip" data-v="7">7</button>
@@ -394,6 +462,16 @@ const PLAYERS={
   2:{ name:'Player 2', color:'var(--p2)', raw:'#ff8a3d', verb:'flick down',ar:'↓', edge:'bottom' }
 };
 
+/* ===== Themes (field + football) ===== */
+const THEMES={
+  grass:   { cls:'t-grass',   ball:'paper' },
+  unicorn: { cls:'t-unicorn', ball:'🦄' },
+  space:   { cls:'t-space',   ball:'🚀' },
+  candy:   { cls:'t-candy',   ball:'🍭' },
+  dino:    { cls:'t-dino',    ball:'🦖' }
+};
+let THEME='grass';
+
 /* ===== State ===== */
 let FW=0, FH=0, BALL=44, R=22, BAND=56, GAP=120;
 let phase='idle';            // idle | aim | flight | extra | over
@@ -410,11 +488,26 @@ function resize(){
   BAND=Math.max(34, Math.min(78, FH*0.085));
   GAP=Math.max(90, FW*0.34);
   ballEl.style.width=BALL+'px'; ballEl.style.height=BALL+'px';
+  const em=ballEl.querySelector('.emoji'); if(em) em.style.fontSize=(BALL*0.94)+'px';
   bandTop.style.height=BAND+'px';
   bandBot.style.height=BAND+'px';
   buildYardLines();
   if(ball.x===0&&ball.y===0){ ball.x=FW/2; ball.y=FH/2; }
   clampInside(); drawBall();
+}
+function renderBall(){
+  const t=THEMES[THEME];
+  if(t.ball==='paper'){ ballEl.innerHTML='<div class="tri"></div>'; }
+  else { ballEl.innerHTML='<div class="emoji" style="font-size:'+(BALL*0.94)+'px">'+t.ball+'</div>'; }
+}
+function applyTheme(key){
+  if(!THEMES[key]) return;
+  THEME=key;
+  for(const k in THEMES) document.body.classList.remove(THEMES[k].cls);
+  document.body.classList.add(THEMES[key].cls);
+  renderBall();
+  document.querySelectorAll('#themeSeg .tchip').forEach(c=>
+    c.classList.toggle('on', c.dataset.t===key));
 }
 function buildYardLines(){
   field.querySelectorAll('.yard').forEach(n=>n.remove());
@@ -714,6 +807,12 @@ scoreSeg.addEventListener('click',e=>{
   const chip=e.target.closest('.chip'); if(!chip) return;
   WIN_SCORE=+chip.dataset.v; syncSeg(); sfx('tick');
 });
+
+/* Theme picker */
+document.getElementById('themeSeg').addEventListener('click',e=>{
+  const c=e.target.closest('.tchip'); if(!c) return;
+  applyTheme(c.dataset.t); sfx('tick');
+});
 function endGame(winner){
   phase='over';
   goal.style.opacity='0'; turn.style.opacity='0';
@@ -751,6 +850,7 @@ window.addEventListener('resize',resize);
 window.addEventListener('orientationchange',()=>setTimeout(resize,250));
 document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
+applyTheme('grass');
 resize();
 })();
 </script>
