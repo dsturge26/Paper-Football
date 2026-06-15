@@ -530,9 +530,11 @@ let blockersActive=false;
 let BR=26;
 
 /* ===== Random Ball Size (Easy only) ===== */
-const RBALL_MIN=0.28, RBALL_MAX=3.2;   // super super small .. absolutely massive
+const RBALL_MIN=0.24;        // tiny (loved)
+const RBALL_MAX_FRAC=0.9;    // max diameter ~= this fraction of field width (almost the whole field)
 let RANDOM_BALL=false;
 let ballScale=1;
+let lastBallScale=0;         // for forcing big turn-to-turn variance
 
 /* ===== Floating Points (Easy only) ===== */
 const PTOK_N=4;                        // how many tokens float at once
@@ -580,9 +582,19 @@ function applyBallSize(){
 }
 /* re-roll the football size at the start of a kick (Random Ball, Easy only) */
 function randomizeBallSize(){
-  // log-uniform so tiny and massive are equally likely across the wide range
-  ballScale = (RANDOM_BALL && MODE==='easy')
-    ? RBALL_MIN*Math.pow(RBALL_MAX/RBALL_MIN, Math.random()) : 1;
+  if(!(RANDOM_BALL && MODE==='easy')){ ballScale=1; applyBallSize(); drawBall(); return; }
+  const minS=RBALL_MIN;
+  // field-relative max so "huge" is almost the whole field on any phone
+  const maxS=Math.max(3, (FW*RBALL_MAX_FRAC)/BALL);
+  let s=1;
+  for(let i=0;i<8;i++){
+    const u=Math.random();
+    const x=(1-Math.cos(Math.PI*u))/2;            // arcsine -> dense at BOTH ends (tiny & huge)
+    s=minS*Math.pow(maxS/minS, x);                // map onto a log scale
+    // force a big jump from the previous turn (>~2x in either direction)
+    if(lastBallScale<=0 || Math.abs(Math.log(s/lastBallScale))>0.7) break;
+  }
+  lastBallScale=s; ballScale=s;
   applyBallSize(); drawBall();
 }
 function applyTheme(key){
