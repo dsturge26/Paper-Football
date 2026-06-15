@@ -291,7 +291,9 @@
 
   /* play-to selector */
   .seglabel{ font-size:12px; font-weight:800; letter-spacing:.2em; text-transform:uppercase; opacity:.6; margin-bottom:10px; }
+  .seglabel small{ font-weight:700; letter-spacing:.06em; opacity:.7; text-transform:none; }
   .seg{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-bottom:30px; }
+  .seg.disabled{ opacity:.35; pointer-events:none; filter:grayscale(.6); }
   .chip{
     font-family:'Anton',sans-serif; font-size:22px; letter-spacing:.02em;
     min-width:62px; padding:12px 16px; border-radius:14px; cursor:pointer;
@@ -385,6 +387,11 @@
       <button class="chip on" data-m="easy">Easy</button>
       <button class="chip" data-m="medium">Medium</button>
       <button class="chip" data-m="hard">Hard</button>
+    </div>
+    <div class="seglabel">Football <small>· Easy only</small></div>
+    <div class="seg" id="ballSeg">
+      <button class="chip on" data-r="0">Normal</button>
+      <button class="chip" data-r="1">🎲 Random Size</button>
     </div>
     <div class="seglabel">Theme</div>
     <div class="seg" id="themeSeg">
@@ -497,6 +504,11 @@ let blockers=[];
 let blockersActive=false;
 let BR=26;
 
+/* ===== Random Ball Size (Easy only) ===== */
+const RBALL_MIN=0.5, RBALL_MAX=1.85;   // super small .. super big
+let RANDOM_BALL=false;
+let ballScale=1;
+
 /* ===== State ===== */
 let FW=0, FH=0, BALL=44, R=22, BAND=56, GAP=120;
 let phase='idle';            // idle | aim | flight | extra | over
@@ -509,12 +521,11 @@ let aiming=false, start=null;
 function resize(){
   const r=field.getBoundingClientRect();
   FW=r.width; FH=r.height;
-  BALL=Math.max(30, Math.min(46, FW*0.085)); R=BALL/2;
+  BALL=Math.max(30, Math.min(46, FW*0.085));
   BAND=Math.max(34, Math.min(78, FH*0.085));
   GAP=Math.max(90, FW*0.34);
   BR=Math.max(20, Math.min(34, FW*0.075));
-  ballEl.style.width=BALL+'px'; ballEl.style.height=BALL+'px';
-  const em=ballEl.querySelector('.emoji'); if(em) em.style.fontSize=(BALL*0.94)+'px';
+  applyBallSize();
   bandTop.style.height=BAND+'px';
   bandBot.style.height=BAND+'px';
   buildYardLines();
@@ -524,8 +535,19 @@ function resize(){
 }
 function renderBall(){
   const t=THEMES[THEME];
-  if(t.ball==='paper'){ ballEl.innerHTML='<div class="tri"></div>'; }
-  else { ballEl.innerHTML='<div class="emoji" style="font-size:'+(BALL*0.94)+'px">'+t.ball+'</div>'; }
+  ballEl.innerHTML = (t.ball==='paper') ? '<div class="tri"></div>' : '<div class="emoji">'+t.ball+'</div>';
+  applyBallSize();
+}
+function applyBallSize(){
+  const size=BALL*ballScale; R=size/2;
+  ballEl.style.width=size+'px'; ballEl.style.height=size+'px';
+  const em=ballEl.querySelector('.emoji'); if(em) em.style.fontSize=(size*0.94)+'px';
+}
+/* re-roll the football size at the start of a kick (Random Ball, Easy only) */
+function randomizeBallSize(){
+  ballScale = (RANDOM_BALL && MODE==='easy')
+    ? (RBALL_MIN + Math.random()*(RBALL_MAX-RBALL_MIN)) : 1;
+  applyBallSize(); drawBall();
 }
 function applyTheme(key){
   if(!THEMES[key]) return;
@@ -655,6 +677,7 @@ function nextTurn(){
   phase='aim';
   goal.style.opacity='0';
   blockersActive=(MODE!=='easy'); showBlockers(true);
+  randomizeBallSize();   // new football size for the next kick
   setTurnUI();
 }
 
@@ -801,7 +824,9 @@ function setupExtra(){
   const tgt=PLAYERS[cur].edge;
   // place ball for the kick
   ball.x=FW/2; ball.y = tgt==='top' ? FH*0.62 : FH*0.38;
-  ball.vx=ball.vy=0; ball.angle=0; clampInside(); drawBall();
+  ball.vx=ball.vy=0; ball.angle=0;
+  randomizeBallSize();   // re-roll size for the extra-point kick too
+  clampInside(); drawBall();
   // draw goalposts at the target edge
   const cx=FW/2, postH=Math.min(34, FH*0.05);
   cross.style.width=GAP+'px';
@@ -891,7 +916,8 @@ function startGame(){
   score={1:0,2:0}; updateScore(1); updateScore(2);
   cur = Math.random()<0.5?1:2;
   setupBlockers(); blockersActive=(MODE!=='easy');
-  ball.x=FW/2; ball.y=FH/2; ball.vx=ball.vy=0; ball.angle=0; clampInside(); separateBall(); drawBall();
+  ball.x=FW/2; ball.y=FH/2; ball.vx=ball.vy=0; ball.angle=0;
+  randomizeBallSize(); clampInside(); separateBall(); drawBall();
   goal.style.opacity='0';
   introEl.classList.add('hide');
   winEl.classList.add('hide');
@@ -928,12 +954,26 @@ document.getElementById('themeSeg').addEventListener('click',e=>{
 
 /* Difficulty picker */
 const modeSeg=document.getElementById('modeSeg');
+const ballSeg=document.getElementById('ballSeg');
+function syncBall(){
+  ballSeg.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', (c.dataset.r==='1')===RANDOM_BALL));
+}
 function syncMode(){
   modeSeg.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c.dataset.m===MODE));
+  const easy = MODE==='easy';
+  if(!easy) RANDOM_BALL=false;        // random size is Easy-only
+  ballSeg.classList.toggle('disabled', !easy);
+  syncBall();
 }
 modeSeg.addEventListener('click',e=>{
   const c=e.target.closest('.chip'); if(!c) return;
   MODE=c.dataset.m; syncMode(); sfx('tick');
+});
+/* Random-ball toggle (Easy only) */
+ballSeg.addEventListener('click',e=>{
+  if(MODE!=='easy') return;
+  const c=e.target.closest('.chip'); if(!c) return;
+  RANDOM_BALL = c.dataset.r==='1'; syncBall(); sfx('tick');
 });
 function endGame(winner){
   phase='over'; blockersActive=false;
@@ -973,6 +1013,7 @@ window.addEventListener('orientationchange',()=>setTimeout(resize,250));
 document.addEventListener('gesturestart',e=>e.preventDefault());
 document.addEventListener('dblclick',e=>e.preventDefault());
 applyTheme('grass');
+syncMode();
 resize();
 })();
 </script>
