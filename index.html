@@ -505,7 +505,7 @@ let blockersActive=false;
 let BR=26;
 
 /* ===== Random Ball Size (Easy only) ===== */
-const RBALL_MIN=0.5, RBALL_MAX=1.85;   // super small .. super big
+const RBALL_MIN=0.28, RBALL_MAX=3.2;   // super super small .. absolutely massive
 let RANDOM_BALL=false;
 let ballScale=1;
 
@@ -545,8 +545,9 @@ function applyBallSize(){
 }
 /* re-roll the football size at the start of a kick (Random Ball, Easy only) */
 function randomizeBallSize(){
+  // log-uniform so tiny and massive are equally likely across the wide range
   ballScale = (RANDOM_BALL && MODE==='easy')
-    ? (RBALL_MIN + Math.random()*(RBALL_MAX-RBALL_MIN)) : 1;
+    ? RBALL_MIN*Math.pow(RBALL_MAX/RBALL_MIN, Math.random()) : 1;
   applyBallSize(); drawBall();
 }
 function applyTheme(key){
