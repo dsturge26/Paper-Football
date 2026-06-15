@@ -155,6 +155,26 @@
   }
   .blocker .bemoji{ filter:drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
 
+  /* floating point tokens */
+  .ptok{
+    position:absolute; top:0; left:0; border-radius:50%; z-index:4;
+    display:flex; align-items:center; justify-content:center; line-height:1;
+    font-family:'Anton',sans-serif; color:#fff;
+    text-shadow:0 1px 2px rgba(0,0,0,.45); transition:opacity .2s; will-change:transform;
+  }
+  .ptok.pos{ background:radial-gradient(circle at 35% 30%, #9bf7cf, #1fbf7a 75%); box-shadow:0 0 16px rgba(52,207,144,.75), 0 4px 10px rgba(0,0,0,.4), inset 0 0 0 2px rgba(255,255,255,.45); }
+  .ptok.neg{ background:radial-gradient(circle at 35% 30%, #ffb3c2, #e23b5e 75%); box-shadow:0 0 16px rgba(255,84,112,.75), 0 4px 10px rgba(0,0,0,.4), inset 0 0 0 2px rgba(255,255,255,.45); }
+  .ptpop{
+    position:absolute; transform:translate(-50%,-50%); pointer-events:none; z-index:9;
+    font-family:'Anton',sans-serif; font-size:34px; text-shadow:0 2px 10px rgba(0,0,0,.6);
+    animation:ptpop 1s ease-out forwards;
+  }
+  @keyframes ptpop{
+    0%{ opacity:0; transform:translate(-50%,-50%) scale(.4) }
+    25%{ opacity:1; transform:translate(-50%,-110%) scale(1.12) }
+    100%{ opacity:0; transform:translate(-50%,-230%) scale(1) }
+  }
+
   /* end-zone scoring bands */
   .band{ position:absolute; left:0; right:0; pointer-events:none; transition:opacity .25s, box-shadow .3s; }
   #bandTop{ top:0; background:linear-gradient(180deg, var(--p2-glow), transparent); border-bottom:2px dashed rgba(255,255,255,.35);}
@@ -393,6 +413,11 @@
       <button class="chip on" data-r="0">Normal</button>
       <button class="chip" data-r="1">🎲 Random Size</button>
     </div>
+    <div class="seglabel">Floating Points <small>· Easy only</small></div>
+    <div class="seg" id="ptsSeg">
+      <button class="chip on" data-p="0">Off</button>
+      <button class="chip" data-p="1">± Floating</button>
+    </div>
     <div class="seglabel">Theme</div>
     <div class="seg" id="themeSeg">
       <button class="tchip on" data-t="grass">🏈<span>Classic</span></button>
@@ -509,6 +534,14 @@ const RBALL_MIN=0.28, RBALL_MAX=3.2;   // super super small .. absolutely massiv
 let RANDOM_BALL=false;
 let ballScale=1;
 
+/* ===== Floating Points (Easy only) ===== */
+const PTOK_N=4;                        // how many tokens float at once
+const PTOK_MAGS=[1,1,1,2,2,3];         // magnitude pool (small more common)
+let FLOAT_POINTS=false;
+let pointTokens=[];
+let pointsActive=false;
+let PR=22;                             // token radius
+
 /* ===== State ===== */
 let FW=0, FH=0, BALL=44, R=22, BAND=56, GAP=120;
 let phase='idle';            // idle | aim | flight | extra | over
@@ -525,11 +558,13 @@ function resize(){
   BAND=Math.max(34, Math.min(78, FH*0.085));
   GAP=Math.max(90, FW*0.34);
   BR=Math.max(20, Math.min(34, FW*0.075));
+  PR=Math.max(17, Math.min(28, FW*0.06));
   applyBallSize();
   bandTop.style.height=BAND+'px';
   bandBot.style.height=BAND+'px';
   buildYardLines();
   layoutBlockers();
+  layoutPoints();
   if(ball.x===0&&ball.y===0){ ball.x=FW/2; ball.y=FH/2; }
   clampInside(); drawBall();
 }
@@ -634,6 +669,82 @@ function separateBall(){
     if(!moved) break;
   }
 }
+
+/* ===== Floating point tokens ===== */
+function ptRandVal(){
+  const mag=PTOK_MAGS[(Math.random()*PTOK_MAGS.length)|0];
+  return (Math.random()<0.5?-1:1)*mag;
+}
+function setupPoints(){
+  field.querySelectorAll('.ptok').forEach(n=>n.remove());
+  pointTokens=[];
+  for(let i=0;i<PTOK_N;i++){
+    const el=document.createElement('div'); el.className='ptok';
+    el.style.opacity='0'; field.appendChild(el);
+    pointTokens.push({ x:0,y:0,vx:0,vy:0,val:1,r:PR,active:false,el });
+  }
+}
+function placeToken(t){
+  const yMin=BAND+PR+12, yMax=FH-BAND-PR-12;
+  const xMin=PR+8, xMax=FW-PR-8;
+  for(let tries=0;tries<14;tries++){
+    t.x=xMin+Math.random()*(xMax-xMin);
+    t.y=yMin+Math.random()*Math.max(1,(yMax-yMin));
+    if(Math.hypot(t.x-ball.x,t.y-ball.y) > R+t.r+70) break; // not right on the ball
+  }
+  const sp=0.5+Math.random()*0.7, a=Math.random()*Math.PI*2;
+  t.vx=Math.cos(a)*sp; t.vy=Math.sin(a)*sp;
+}
+function resetPoints(){
+  const on = FLOAT_POINTS && MODE==='easy';
+  pointsActive=on;
+  for(const t of pointTokens){
+    if(on){ t.r=PR; t.val=ptRandVal(); placeToken(t); t.active=true; styleToken(t); }
+    else { t.active=false; }
+  }
+  renderPoints();
+}
+function styleToken(t){
+  const pos=t.val>0;
+  t.el.className='ptok '+(pos?'pos':'neg');
+  t.el.textContent=(pos?'+':'−')+Math.abs(t.val);
+  t.el.style.width=(t.r*2)+'px'; t.el.style.height=(t.r*2)+'px';
+  t.el.style.fontSize=(t.r*0.95)+'px';
+}
+function layoutPoints(){
+  for(const t of pointTokens){ t.r=PR; styleToken(t); t.x=Math.min(Math.max(t.x,t.r),FW-t.r); }
+  renderPoints();
+}
+function renderPoints(){
+  for(const t of pointTokens){
+    t.el.style.transform=`translate3d(${t.x-t.r}px,${t.y-t.r}px,0)`;
+    t.el.style.opacity=(pointsActive && t.active)?'1':'0';
+  }
+}
+function movePoints(h){
+  if(!pointsActive) return;
+  const yMin=BAND+PR+4, yMax=FH-BAND-PR-4;
+  for(const t of pointTokens){
+    if(!t.active) continue;
+    t.x+=t.vx*h; t.y+=t.vy*h;
+    if(t.x<t.r){ t.x=t.r; t.vx=Math.abs(t.vx); } else if(t.x>FW-t.r){ t.x=FW-t.r; t.vx=-Math.abs(t.vx); }
+    if(t.y<yMin){ t.y=yMin; t.vy=Math.abs(t.vy); } else if(t.y>yMax){ t.y=yMax; t.vy=-Math.abs(t.vy); }
+  }
+}
+function collectPoints(){
+  if(!pointsActive) return;
+  for(const t of pointTokens){
+    if(!t.active) continue;
+    if(Math.hypot(ball.x-t.x,ball.y-t.y) < R+t.r){
+      t.active=false; t.el.style.opacity='0';
+      score[cur]=Math.max(0, score[cur]+t.val);
+      updateScore(cur);
+      ptpop((t.val>0?'+':'−')+Math.abs(t.val), t.val>0?'#34cf90':'#ff5470', t.x, t.y);
+      sfx(t.val>0?'score':'miss');
+      navigator.vibrate && navigator.vibrate(t.val>0?20:[10,30,10]);
+    }
+  }
+}
 function buildYardLines(){
   field.querySelectorAll('.yard').forEach(n=>n.remove());
   for(let i=1;i<10;i++){
@@ -679,6 +790,7 @@ function nextTurn(){
   goal.style.opacity='0';
   blockersActive=(MODE!=='easy'); showBlockers(true);
   randomizeBallSize();   // new football size for the next kick
+  resetPoints();         // fresh floating-point layout each turn
   setTurnUI();
 }
 
@@ -766,6 +878,9 @@ function integrate(frames){
     // bumpers
     moveBlockers(h);
     collideBlockers();
+    // floating points
+    movePoints(h);
+    collectPoints();
     sp=Math.hypot(ball.vx,ball.vy);
     // off the top/bottom edges
     if(ball.y < -R) return 'exit-top';
@@ -782,14 +897,14 @@ function resolveNormal(ev){
     const tgt=PLAYERS[cur].edge;
     if(tgt==='top' && ball.y < BAND){ touchdown(); return; }
     if(tgt==='bottom' && ball.y > FH-BAND){ touchdown(); return; }
-    // no score — opponent flicks the same ball from here
-    nextTurn();
   } else {
     // ball flew off an edge => turnover, neutral re-spot
     sfx('miss'); flash('TURNOVER');
     ball.x=FW/2; ball.y=FH/2; ball.vx=ball.vy=0; ball.angle=0; clampInside(); separateBall(); drawBall();
-    nextTurn();
   }
+  // a flight can change the score via floating points -> check for a win
+  if(score[cur]>=WIN_SCORE) return endGame(cur);
+  nextTurn();
 }
 function resolveExtra(ev){
   const tgt=PLAYERS[cur].edge;
@@ -822,6 +937,7 @@ function touchdown(){
 function setupExtra(){
   phase='extra';
   blockersActive=false; showBlockers(false);   // clear bumpers for the kick
+  pointsActive=false; renderPoints();           // clear floating points for the kick
   const tgt=PLAYERS[cur].edge;
   // place ball for the kick
   ball.x=FW/2; ball.y = tgt==='top' ? FH*0.62 : FH*0.38;
@@ -860,8 +976,10 @@ function loop(now){
     }
   } else {
     moveBlockers(frames);   // bumpers keep drifting while you aim (hard mode)
+    movePoints(frames);     // tokens keep floating while you aim
   }
   if(blockers.length) renderBlockers();
+  if(pointTokens.length) renderPoints();
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
@@ -881,6 +999,13 @@ function flash(txt){
   if(cur===2) d.style.transform='translate(-50%,-50%) rotate(180deg)';
   field.appendChild(d);
   setTimeout(()=>d.remove(),1250);
+}
+function ptpop(txt,color,x,y){
+  const d=document.createElement('div');
+  d.className='ptpop'; d.textContent=txt; d.style.color=color;
+  d.style.left=x+'px'; d.style.top=y+'px';
+  field.appendChild(d);
+  setTimeout(()=>d.remove(),1000);
 }
 
 /* ===== Web Audio (subtle, no files) ===== */
@@ -917,8 +1042,10 @@ function startGame(){
   score={1:0,2:0}; updateScore(1); updateScore(2);
   cur = Math.random()<0.5?1:2;
   setupBlockers(); blockersActive=(MODE!=='easy');
+  setupPoints();
   ball.x=FW/2; ball.y=FH/2; ball.vx=ball.vy=0; ball.angle=0;
   randomizeBallSize(); clampInside(); separateBall(); drawBall();
+  resetPoints();
   goal.style.opacity='0';
   introEl.classList.add('hide');
   winEl.classList.add('hide');
@@ -928,7 +1055,7 @@ function startGame(){
 
 /* Return to the start screen (also where the win target is chosen) */
 function openIntro(){
-  phase='idle'; blockersActive=false;
+  phase='idle'; blockersActive=false; pointsActive=false; renderPoints();
   turn.style.opacity='0'; goal.style.opacity='0';
   newgameBtn.classList.remove('show');
   winEl.classList.add('hide');
@@ -956,15 +1083,20 @@ document.getElementById('themeSeg').addEventListener('click',e=>{
 /* Difficulty picker */
 const modeSeg=document.getElementById('modeSeg');
 const ballSeg=document.getElementById('ballSeg');
+const ptsSeg=document.getElementById('ptsSeg');
 function syncBall(){
   ballSeg.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', (c.dataset.r==='1')===RANDOM_BALL));
+}
+function syncPts(){
+  ptsSeg.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', (c.dataset.p==='1')===FLOAT_POINTS));
 }
 function syncMode(){
   modeSeg.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on', c.dataset.m===MODE));
   const easy = MODE==='easy';
-  if(!easy) RANDOM_BALL=false;        // random size is Easy-only
+  if(!easy){ RANDOM_BALL=false; FLOAT_POINTS=false; }   // Easy-only extras
   ballSeg.classList.toggle('disabled', !easy);
-  syncBall();
+  ptsSeg.classList.toggle('disabled', !easy);
+  syncBall(); syncPts();
 }
 modeSeg.addEventListener('click',e=>{
   const c=e.target.closest('.chip'); if(!c) return;
@@ -976,8 +1108,14 @@ ballSeg.addEventListener('click',e=>{
   const c=e.target.closest('.chip'); if(!c) return;
   RANDOM_BALL = c.dataset.r==='1'; syncBall(); sfx('tick');
 });
+/* Floating-points toggle (Easy only) */
+ptsSeg.addEventListener('click',e=>{
+  if(MODE!=='easy') return;
+  const c=e.target.closest('.chip'); if(!c) return;
+  FLOAT_POINTS = c.dataset.p==='1'; syncPts(); sfx('tick');
+});
 function endGame(winner){
-  phase='over'; blockersActive=false;
+  phase='over'; blockersActive=false; pointsActive=false; renderPoints();
   goal.style.opacity='0'; turn.style.opacity='0';
   const w=document.getElementById('win');
   const nm=document.getElementById('winName');
